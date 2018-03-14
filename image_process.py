@@ -6,6 +6,26 @@ from os import listdir
 import os
 from random import shuffle
 import glob
+import h5py
+
+category = {'BabyBibs' : 0,
+            'BabyHat' : 1,
+            'BabyPants' : 2,
+            'BabyShirt' : 3,
+            'PackageFart' : 4,
+            'womanshirtsleeve' : 5,
+            'womencasualshoes' : 6,
+            'womenchiffontop' : 7,
+            'womendollshoes' : 8,
+            'womenknittedtop' : 9,
+            'womenlazyshoes' : 10,
+            'womenlongsleevetop' : 11,
+            'womenpeashoes' : 12,
+            'womenplussizedtop' : 13,
+            'womenpointedflatshoes' : 14,
+            'womensleevelesstop' : 15,
+            'womenstripedtop' : 16,
+            'wrapsnslings' : 17}
 
 # returns bordered image with all the color channel - (64,64,3)
 def processImage(path, outsize=64):
@@ -205,7 +225,7 @@ def processColoredTxt(path, outsize=64):
     return chosen_patch
 
 
-# test unit
+# test unit for image pre-processing
 def test(outsize=64):
 
     for path in sorted(glob.glob('Test/Test_*.jpg'), key=lambda f: int(''.join(filter(str.isdigit, f)))):
@@ -222,6 +242,7 @@ def test(outsize=64):
     # cv.waitKey(0)
 
 
+# returns the augmented image - (64,64,3)
 def processAugmented(path, outsize=64):
 
     mono = processMono(path).reshape(outsize,outsize,-1)
@@ -235,6 +256,7 @@ def processAugmented(path, outsize=64):
     return augmented
 
 
+# main dataset generator class
 class DataSetGenerator:
 
     def __init__(self, data_dir):
@@ -242,7 +264,7 @@ class DataSetGenerator:
         self.data_labels = self.get_data_labels()
         self.data_info = self.get_data_paths()
 
-
+    # get folder names as labels under data_dir
     def get_data_labels(self):
         data_labels = []
         for filename in listdir(self.data_dir):
@@ -250,7 +272,7 @@ class DataSetGenerator:
                 data_labels.append(filename)
         return data_labels
 
-
+    # get all the image paths under data_dir
     def get_data_paths(self):
         data_paths = []
         for label in self.data_labels:
@@ -264,6 +286,7 @@ class DataSetGenerator:
             data_paths.append(img_lists)
         return data_paths
 
+    # generate the processed image
     def generate_image(self, out_dir):
         counter = 1
 
@@ -281,10 +304,54 @@ class DataSetGenerator:
                 cv.imwrite('{}_{}.jpg'.format(join(out_dir,label,label),counter), image)
                 counter += 1
 
+    # generate the training and development dataset
+    def generate_dataset(self, dev_ratio = 0.15):
+        images_train = []
+        labels_train = []
+        images_dev = []
+        labels_dev = []
+
+        for i in range(len(self.data_labels)):
+            label = self.data_labels[i]
+            counter = 1
+
+            for path in self.data_info[i]:
+                image = cv.imread(path)
+                if counter < dev_ratio*len(self.data_info[i]):
+                    images_dev.append(image)
+                    labels_dev.append(category[label])
+                else:
+                    images_train.append(image)
+                    labels_train.append(category[label])
+                counter += 1
+
+        images_train = np.array(images_train)
+        images_dev = np.array(images_dev)
+        labels_train = np.array(labels_train).reshape(-1,1)
+        labels_dev = np.array(labels_dev).reshape(-1, 1)
+
+        print('images_train shape : {}\nlabel_train shape: {}'.format(images_train.shape,labels_train.shape))
+        print('images_dev shape : {}\nlabel_dev shape: {}'.format(images_dev.shape, labels_dev.shape))
+
+        f1 = h5py.File("train_aug.h5", "a")
+        train_x = f1.create_dataset("train_set_x", data=images_train)
+        train_y = f1.create_dataset("train_set_y", data=labels_train)
+        print(train_x.shape, train_y.shape)
+        f1.close()
+
+        f2 = h5py.File("dev_aug.h5", "a")
+        dev_x = f2.create_dataset("dev_set_x", data=images_dev)
+        dev_y = f2.create_dataset("dev_set_y", data=labels_dev)
+        print(dev_x.shape, dev_y.shape)
+        f2.close()
+
 
 def main():
-    generator = DataSetGenerator('Training_Images')
-    generator.generate_image('Training_paug')
+    # generator = DataSetGenerator('Training_Images')
+    # generator.generate_image('Training_paug')
+
+    generator = DataSetGenerator('Training_paug')
+    generator.generate_dataset(dev_ratio=0.15)
 
 
 if __name__ == '__main__':
