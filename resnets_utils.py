@@ -1,15 +1,14 @@
-import os
 import numpy as np
 import tensorflow as tf
 import h5py
 import math
 
 def load_dataset():
-    train_dataset = h5py.File('dataset/train_aug.h5', "r")
+    train_dataset = h5py.File('dataset/train_feature.h5', "r")
     train_set_x_orig = np.array(train_dataset["train_set_x"][:]) # your train set features
     train_set_y_orig = np.array(train_dataset["train_set_y"][:]) # your train set labels
 
-    test_dataset = h5py.File('dataset/dev_aug.h5', "r")
+    test_dataset = h5py.File('dataset/dev_feature.h5', "r")
     test_set_x_orig = np.array(test_dataset["dev_set_x"][:]) # your test set features
     test_set_y_orig = np.array(test_dataset["dev_set_y"][:]) # your test set labels
     
@@ -42,7 +41,7 @@ def random_mini_batches(X, Y, mini_batch_size = 64):
     shuffled_Y = Y[permutation,:]
 
     # Step 2: Partition (shuffled_X, shuffled_Y). Minus the end case.
-    num_complete_minibatches = math.floor(m/mini_batch_size) # number of mini batches of size mini_batch_size in your partitionning
+    num_complete_minibatches = int(math.floor(m/mini_batch_size)) # number of mini batches of size mini_batch_size in your partitionning
     for k in range(0, num_complete_minibatches):
         mini_batch_X = shuffled_X[k * mini_batch_size : k * mini_batch_size + mini_batch_size,:,:,:]
         mini_batch_Y = shuffled_Y[k * mini_batch_size : k * mini_batch_size + mini_batch_size,:]
