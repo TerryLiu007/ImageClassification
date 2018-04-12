@@ -1,12 +1,12 @@
 import cv2 as cv
 import numpy as np
-from matplotlib import pyplot as plt
 from os.path import isfile, join
 from os import listdir
 import os
-from random import shuffle
 import glob
 import h5py
+import shutil
+from feature_preprocess import feature_vector
 
 category = {'BabyBibs' : 0,
             'BabyHat' : 1,
@@ -157,7 +157,7 @@ def processTxt(path, outsize=64):
     # plt.xlim([0, 256])
     # plt.show()
 
-    chosen_patch = patch[np.argmin(hist_correlation)]
+    chosen_patch = patch[int(np.argmin(hist_correlation))]
 
     # patch_norm = chosen_patch/255
 
@@ -188,7 +188,7 @@ def processColoredTxt(path, outsize=64):
     segment_h_len = int(img_size[1] / segment_h)
 
     if segment_v == 1 or segment_h == 1:
-        return processCrop(path)
+        return processCrop(path, outsize)
 
     patch = []
     patch_edge = []
@@ -220,7 +220,7 @@ def processColoredTxt(path, outsize=64):
         # cv.imshow('patches', patch[i])
         # cv.waitKey(0)
 
-    chosen_patch = cv.cvtColor(patch[np.argmin(hist_correlation)], cv.COLOR_BGR2GRAY)
+    chosen_patch = cv.cvtColor(patch[int(np.argmin(hist_correlation))], cv.COLOR_BGR2GRAY)
     # patch_norm = chosen_patch/255
     return chosen_patch
 
@@ -228,7 +228,7 @@ def processColoredTxt(path, outsize=64):
 # test unit for image pre-processing
 def test(outsize=64):
 
-    for path in sorted(glob.glob('Test/Test_*.jpg'), key=lambda f: int(''.join(filter(str.isdigit, f)))):
+    for path in sorted(glob.glob('images/Test/Test_*.jpg'), key=lambda f: int(''.join(filter(str.isdigit, f)))):
         monoImg = processMono(path, outsize)
         croppedImg = processCrop(path, outsize)
         Txt = processTxt(path, outsize)
@@ -245,9 +245,9 @@ def test(outsize=64):
 # returns the augmented image - (64,64,3)
 def processAugmented(path, outsize=64):
 
-    mono = processMono(path).reshape(outsize,outsize,-1)
-    crop = processCrop(path).reshape(outsize,outsize,-1)
-    text = processColoredTxt(path).reshape(outsize,outsize,-1)
+    mono = processMono(path, outsize).reshape(outsize,outsize,-1)
+    crop = processCrop(path, outsize).reshape(outsize,outsize,-1)
+    text = processColoredTxt(path, outsize).reshape(outsize,outsize,-1)
 
     # cv.imshow('augmented',np.hstack((mono,crop,text)))
     # cv.waitKey(0)
@@ -314,9 +314,11 @@ class DataSetGenerator:
         for i in range(len(self.data_labels)):
             label = self.data_labels[i]
             counter = 1
+            print("processing {}".format(label))
 
             for path in self.data_info[i]:
-                image = cv.imread(path)
+                image = cv.imread(path, 0)
+                image = feature_vector(image)
                 if counter < dev_ratio*len(self.data_info[i]):
                     images_dev.append(image)
                     labels_dev.append(category[label])
@@ -333,25 +335,46 @@ class DataSetGenerator:
         print('images_train shape : {}\nlabel_train shape: {}'.format(images_train.shape,labels_train.shape))
         print('images_dev shape : {}\nlabel_dev shape: {}'.format(images_dev.shape, labels_dev.shape))
 
-        f1 = h5py.File("train_aug.h5", "a")
+        f1 = h5py.File("train_feature", "a")
         train_x = f1.create_dataset("train_set_x", data=images_train)
         train_y = f1.create_dataset("train_set_y", data=labels_train)
         print(train_x.shape, train_y.shape)
         f1.close()
 
-        f2 = h5py.File("dev_aug.h5", "a")
+        f2 = h5py.File("dev_feature", "a")
         dev_x = f2.create_dataset("dev_set_x", data=images_dev)
         dev_y = f2.create_dataset("dev_set_y", data=labels_dev)
         print(dev_x.shape, dev_y.shape)
         f2.close()
 
+    # split the training set into train and dev set
+    def split_train_dev(self, out_dir_train, out_dir_dev, dev_ratio = 0.15):
+        for i in range(len(self.data_labels)):
+            label = self.data_labels[i]
+            counter = 1
+
+            if not os.path.exists(join(out_dir_train, label)):
+                os.makedirs(join(out_dir_train, label))
+            if not os.path.exists(join(out_dir_dev, label)):
+                os.makedirs(join(out_dir_dev, label))
+                
+            for path in self.data_info[i]:
+                if counter < dev_ratio*len(self.data_info[i]):
+                    shutil.copy2(path, join(out_dir_dev, label))
+                else:
+                    shutil.copy2(path, join(out_dir_train, label))
+                counter += 1
+
 
 def main():
-    # generator = DataSetGenerator('Training_Images')
-    # generator.generate_image('Training_paug')
+    # generator = DataSetGenerator('images/Training')
+    # generator.generate_image('images/Training_aug')
 
-    generator = DataSetGenerator('Training_paug')
-    generator.generate_dataset(dev_ratio=0.15)
+    generator = DataSetGenerator('images/Training')
+    generator.generate_dataset()
+
+
+
 
 
 if __name__ == '__main__':
